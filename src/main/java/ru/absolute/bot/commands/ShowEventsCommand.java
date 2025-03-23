@@ -1,5 +1,7 @@
 package ru.absolute.bot.commands;
 
+import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
@@ -8,225 +10,148 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.absolute.bot.models.Event;
 import ru.absolute.bot.models.EventStatus;
+import ru.absolute.bot.services.BossService;
 import ru.absolute.bot.services.EventService;
 
-import java.util.Arrays;
+import java.awt.*;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class ShowEventsCommand {
-    private static final Logger logger = LoggerFactory.getLogger(ShowEventsCommand.class);
-    private final EventService eventService = new EventService();
+    private final EventService eventService;
+    private final BossService bossService;
 
-    // Метод для обработки команды /show_events
+    public ShowEventsCommand(EventService eventService, BossService bossService) {
+        this.eventService = eventService;
+        this.bossService = bossService;
+    }
+
     public void handle(SlashCommandInteractionEvent event) {
-        try {
-            // Подтверждаем выполнение команды (deferReply)
-            event.deferReply().queue();
+        // Получаем статус события из команды (если указан)
+        OptionMapping statusOption = event.getOption("status");
+        EventStatus status;
 
-            // Получаем статус, если он передан
-            OptionMapping statusOption = event.getOption("status");
-            EventStatus status = EventStatus.IN_PROGRESS; // По умолчанию фильтруем по IN_PROGRESS
-            if (statusOption != null) {
-                try {
-                    status = EventStatus.valueOf(statusOption.getAsString().toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    event.getHook().sendMessage("Неверный статус. Используйте IN_PROGRESS или DONE.").setEphemeral(true).queue();
-                    return;
-                }
-            }
-
-            // Отправляем первую страницу событий
-            sendEventPage(event, status, 0);
-
-        } catch (Exception e) {
-            logger.error("Ошибка при выполнении команды /show_events", e);
-            event.getHook().sendMessage("Произошла ошибка при получении списка событий.").setEphemeral(true).queue();
-        }
-    }
-
-    // Метод для отправки страницы событий
-    public void sendEventPage(SlashCommandInteractionEvent event, EventStatus status, int page) {
-        try {
-            // Подтверждаем выполнение команды (deferReply)
-            event.deferReply().queue();
-
-            // Отправляем первую страницу событий
-            sendEventPageInternal(event, null, status, page);
-
-        } catch (Exception e) {
-            logger.error("Ошибка при выполнении команды /show_events", e);
-            event.getHook().sendMessage("Произошла ошибка при получении списка событий.").setEphemeral(true).queue();
-        }
-    }
-
-    // Метод для обработки ButtonInteractionEvent (навигация по страницам)
-    public void sendEventPageForButton(ButtonInteractionEvent event, EventStatus status, int page) {
-        try {
-            // Получаем события
-            List<Event> events = eventService.getEventsByStatus(status);
-            if (events == null || events.isEmpty()) {
-                event.getHook().sendMessage("Событий не найдено.").setEphemeral(true).queue();
-                return;
-            }
-
-            // Разбиваем события на страницы (по 5 событий на страницу)
-            int pageSize = 5;
-            int totalPages = (int) Math.ceil((double) events.size() / pageSize);
-
-            // Проверяем, что запрошенная страница существует
-            if (page < 0 || page >= totalPages) {
-                event.getHook().sendMessage("Неверная страница.").setEphemeral(true).queue();
-                return;
-            }
-
-            // Вычисляем начальный и конечный индексы для текущей страницы
-            int start = page * pageSize;
-            int end = Math.min(start + pageSize, events.size());
-
-            // Отправляем каждое событие отдельным сообщением с кнопками
-            for (int i = start; i < end; i++) {
-                Event eventItem = events.get(i);
-                sendEventMessage(eventItem, null, event);
-
-                // Добавляем задержку в 1 секунду между сообщениями
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    logger.error("Ошибка при добавлении задержки", e);
-                }
-            }
-
-            // Добавляем кнопки для навигации по страницам
-            if (totalPages > 1) {
-                Button previousButton = Button.secondary("events_previous:" + status + ":" + page, "Previous").withDisabled(page == 0);
-                Button nextButton = Button.secondary("events_next:" + status + ":" + page, "Next").withDisabled(page == totalPages - 1);
-
-                event.getHook().sendMessage("Навигация:")
-                        .setActionRow(previousButton, nextButton)
-                        .queue();
-            }
-
-        } catch (Exception e) {
-            logger.error("Ошибка при отправке страницы событий", e);
-            event.getHook().sendMessage("Произошла ошибка при отправке страницы событий.").setEphemeral(true).queue();
-        }
-    }
-
-    // Внутренний метод для обработки обоих типов событий
-    private void sendEventPageInternal(SlashCommandInteractionEvent slashEvent, ButtonInteractionEvent buttonEvent, EventStatus status, int page) {
-        try {
-            // Получаем события
-            List<Event> events = eventService.getEventsByStatus(status);
-            if (events == null || events.isEmpty()) {
-                sendReply("Событий не найдено.", slashEvent, buttonEvent);
-                return;
-            }
-
-            // Разбиваем события на страницы (по 5 событий на страницу)
-            int pageSize = 5;
-            int totalPages = (int) Math.ceil((double) events.size() / pageSize);
-
-            // Проверяем, что запрошенная страница существует
-            if (page < 0 || page >= totalPages) {
-                sendReply("Неверная страница.", slashEvent, buttonEvent);
-                return;
-            }
-
-            // Добавляем заголовок страницы
-            String pageHeader = "───────────────────────\n**Страница " + (page + 1) + " из " + totalPages + "**\n───────────────────────";
-            if (slashEvent != null) {
-                slashEvent.getHook().sendMessage(pageHeader).queue();
-            } else if (buttonEvent != null) {
-                buttonEvent.getHook().sendMessage(pageHeader).queue();
-            }
-
-            // Вычисляем начальный и конечный индексы для текущей страницы
-            int start = page * pageSize;
-            int end = Math.min(start + pageSize, events.size());
-
-            // Отправляем каждое событие отдельным сообщением с кнопками
-            for (int i = start; i < end; i++) {
-                Event eventItem = events.get(i);
-                sendEventMessage(eventItem, slashEvent, buttonEvent);
-            }
-
-            // Добавляем кнопки для навигации по страницам
-            if (totalPages > 1) {
-                Button previousButton = Button.secondary("events_previous:" + status + ":" + page, "◀").withDisabled(page == 0);
-                Button nextButton = Button.secondary("events_next:" + status + ":" + page, "▶").withDisabled(page == totalPages - 1);
-
-                String navigationMessage = "Навигация:";
-                if (slashEvent != null) {
-                    slashEvent.getHook().sendMessage(navigationMessage)
-                            .setActionRow(previousButton, nextButton)
-                            .queue();
-                } else if (buttonEvent != null) {
-                    buttonEvent.getHook().sendMessage(navigationMessage)
-                            .setActionRow(previousButton, nextButton)
-                            .queue();
-                }
-            }
-
-        } catch (Exception e) {
-            logger.error("Ошибка при отправке страницы событий", e);
-            sendReply("Произошла ошибка при отправке страницы событий.", slashEvent, buttonEvent);
-        }
-    }
-
-    // Метод для отправки сообщения с событием и кнопками
-    private void sendEventMessage(Event eventItem, SlashCommandInteractionEvent slashEvent, ButtonInteractionEvent buttonEvent) {
-        String drop = eventItem.getDrop();
-        String dropNames = "";
-
-        if (!drop.isEmpty()) {
+        if (statusOption == null) {
+            // Если статус не указан, используем IN_PROGRESS по умолчанию
+            status = EventStatus.IN_PROGRESS;
+        } else {
+            // Пытаемся получить статус из команды
+            String statusStr = statusOption.getAsString();
             try {
-                // Получаем названия дропов по их ID
-                List<String> dropIds = Arrays.asList(drop.split(","));
-                dropNames = dropIds.stream()
-                        .map(id -> {
-                            try {
-                                return eventService.getSheetsService().getItemNameById(id);
-                            } catch (Exception e) {
-                                logger.error("Ошибка при получении названия дропа по ID: " + id, e);
-                                return id; // Возвращаем ID, если не удалось получить название
-                            }
-                        })
-                        .collect(Collectors.joining(", "));
-            } catch (Exception e) {
-                logger.error("Ошибка при обработке дропов", e);
-                dropNames = drop; // Возвращаем исходный список ID, если произошла ошибка
+                status = EventStatus.valueOf(statusStr.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                event.reply("Неверный статус события. Используйте IN_PROGRESS или DONE.").setEphemeral(true).queue();
+                return;
             }
         }
 
-        String message = "**Дата:** " + eventItem.getDate() + "\n" +
-                "**ID:** " + eventItem.getId() + "\n" +
-                "**Босс:** " + eventItem.getBossName() + "\n" +
-                "**Дроп:** " + (dropNames.isEmpty() ? "Нет дропа" : dropNames) + "\n" +
-                "**Участники:** " + String.join(", ", eventItem.getMembers());
+        // Получаем события по статусу
+        List<Event> events = eventService.getEventsByStatus(status);
 
-        // Создаем кнопки для управления событием
-        Button editButton = Button.primary("edit_event:" + eventItem.getId(), "Edit");
-        Button closeButton = Button.danger("close_event:" + eventItem.getId(), "Close");
+        // Сортируем по дате
+        events.sort(Comparator.comparing(Event::getDate));
 
-        // Отправляем сообщение с кнопками
-        if (slashEvent != null) {
-            slashEvent.getHook().sendMessage(message)
-                    .setActionRow(editButton, closeButton)
-                    .queue(); // Асинхронная отправка
-        } else if (buttonEvent != null) {
-            buttonEvent.getHook().sendMessage(message)
-                    .setActionRow(editButton, closeButton)
-                    .queue(); // Асинхронная отправка
+        // Если событий нет, сообщаем об этом
+        if (events.isEmpty()) {
+            event.reply("Событий со статусом **" + status + "** не найдено.").setEphemeral(true).queue();
+            return;
         }
+
+        // Создаем embed для красивого вывода
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle("События со статусом: " + status);
+        embed.setColor(status == EventStatus.IN_PROGRESS ? Color.GREEN : Color.GRAY); // Цвет в зависимости от статуса
+
+        // Добавляем каждое событие в embed
+        for (Event ev : events) {
+            // Получаем названия дропов
+            List<String> dropNames = getDropNames(ev.getDrop(), bossService);
+
+            // Форматируем дропы в блоки
+            String formattedDrops = formatDropsIntoBlocks(dropNames, 5); // 5 дропов в блоке
+
+            // Форматируем дату
+            String formattedDate = ev.getDate().format(DateTimeFormatter.ofPattern("dd.MM"));
+
+            // Эмодзи для статуса
+            String statusEmoji = status == EventStatus.IN_PROGRESS ? "⏳" : "✅";
+
+            // Формируем информацию о событии
+            String eventInfo = String.format(
+                    "%s **Событие #%s**\n" +
+                            "**Дата:** %s\n" +
+                            "**Босс:** %s\n" +
+                            "**Дроп:**\n%s\n" +
+                            "**Участники:** %s\n" +
+                            "**Кол-во участников:** %d\n" +
+                            "\u200B", // Разделитель (невидимый символ)
+                    statusEmoji, // Эмодзи для статуса
+                    ev.getId(),
+                    formattedDate, // Используем отформатированную дату
+                    ev.getBossName(),
+                    formattedDrops,
+                    String.join(", ", ev.getMembers()),
+                    ev.getNumberOfMembers()
+            );
+
+            // Добавляем событие в embed
+            embed.addField("\u200B", eventInfo, false); // Используем невидимый символ для разделения
+        }
+
+        // Отправляем embed в ответ
+        event.replyEmbeds(embed.build()).queue();
     }
 
-    // Метод для отправки простого ответа
-    private void sendReply(String message, SlashCommandInteractionEvent slashEvent, ButtonInteractionEvent buttonEvent) {
-        if (slashEvent != null) {
-            slashEvent.getHook().sendMessage(message).setEphemeral(true).queue();
-        } else if (buttonEvent != null) {
-            buttonEvent.getHook().sendMessage(message).setEphemeral(true).queue();
+    /**
+     * Получает названия дропов по их ID.
+     */
+    private List<String> getDropNames(String dropIds, BossService bossService) {
+        Map<String, String> itemsMap = bossService.getItemsMap(); // Используем кэш предметов
+        List<String> dropNames = new ArrayList<>();
+
+        // Предположим, что dropIds — это строка вида "393,394,415,416,1938,1939,316,317,2030,956"
+        String[] ids = dropIds.split(",");
+        for (String id : ids) {
+            String itemName = itemsMap.get(id.trim());
+            if (itemName != null) {
+                dropNames.add(itemName);
+            } else {
+                log.warn("Не найдено название для дропа с ID: {}", id);
+            }
         }
+
+        return dropNames;
+    }
+
+    /**
+     * Форматирует дропы в блоки.
+     *
+     * @param dropNames Список названий дропов.
+     * @param blockSize Количество дропов в одном блоке.
+     * @return Отформатированная строка с дропами.
+     */
+    private String formatDropsIntoBlocks(List<String> dropNames, int blockSize) {
+        StringBuilder formattedDrops = new StringBuilder();
+        int count = 0;
+
+        for (String drop : dropNames) {
+            formattedDrops.append("• ").append(drop).append("\n");
+            count++;
+
+            // Добавляем разделитель после каждого блока
+            if (count % blockSize == 0) {
+                formattedDrops.append("```\n```\n"); // Разделитель между блоками
+            }
+        }
+
+        // Если дропы не делятся на блоки ровно, добавляем код-блок в конце
+        if (count % blockSize != 0) {
+            formattedDrops.append("```");
+        }
+
+        return formattedDrops.toString();
     }
 }

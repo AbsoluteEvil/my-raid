@@ -1,26 +1,27 @@
 package ru.absolute.bot.commands;
 
+import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.interactions.AutoCompleteQuery;
 import net.dv8tion.jda.api.interactions.commands.Command;
-import net.dv8tion.jda.api.interactions.commands.OptionMapping;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import ru.absolute.bot.services.BossService;
-import ru.absolute.bot.services.GoogleSheetsService;
-import ru.absolute.bot.utils.TimeUtils;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 
-import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class KillCommand {
-    private static final Logger logger = LoggerFactory.getLogger(GoogleSheetsService.class);
-    private final BossService bossService = new BossService();
+    private final BossService bossService;
 
+    public KillCommand(BossService bossService) {
+        this.bossService = bossService;
+    }
+
+    /**
+     * Обрабатывает команду /kill.
+     */
     public void handle(SlashCommandInteractionEvent event) {
         String bossName = event.getOption("boss_name").getAsString();
         try {
@@ -36,10 +37,14 @@ public class KillCommand {
                     .addActionRow(okButton, createEventButton) // Добавляем кнопки
                     .queue();
         } catch (Exception e) {
+            log.error("Ошибка при обновлении времени убийства босса {}", bossName, e);
             event.reply("Произошла ошибка при обновлении времени убийства босса.").setEphemeral(true).queue();
         }
     }
 
+    /**
+     * Обрабатывает автозаполнение для команды /kill.
+     */
     public void handleAutocomplete(CommandAutoCompleteInteractionEvent event) {
         AutoCompleteQuery option = event.getFocusedOption();
         if (option.getName().equals("boss_name")) {
@@ -51,7 +56,7 @@ public class KillCommand {
                         .collect(Collectors.toList());
                 event.replyChoices(choices).queue();
             } catch (Exception e) {
-                e.printStackTrace(); // Логируем ошибку для отладки
+                log.error("Ошибка при обработке автозаполнения для boss_name", e);
                 event.replyChoices().queue(); // Пустой ответ в случае ошибки
             }
         }

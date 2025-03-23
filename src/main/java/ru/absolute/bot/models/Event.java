@@ -5,6 +5,7 @@ import lombok.Setter;
 import lombok.AllArgsConstructor;
 import lombok.ToString;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Getter
@@ -21,13 +22,18 @@ public class Event {
     private EventStatus status;
 
     public void addMember(String member) {
-        this.members.add(member);
-        this.numberOfMembers++;
+        if (members == null) {
+            members = new ArrayList<>();
+        }
+        members.add(member);
+        numberOfMembers = members.size(); // Обновляем количество участников
     }
 
     public void removeMember(String member) {
-        this.members.remove(member);
-        this.numberOfMembers--;
+        if (members != null) {
+            members.remove(member);
+            numberOfMembers = members.size(); // Обновляем количество участников
+        }
     }
 }
 

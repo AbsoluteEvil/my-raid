@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Getter
@@ -18,4 +19,5 @@ public class Boss {
     private int level;
     private LocalDateTime killTime;
     private List<String> itemList;
+    private String location;
 }
