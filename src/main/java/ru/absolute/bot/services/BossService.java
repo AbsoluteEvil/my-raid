@@ -8,7 +8,9 @@ import ru.absolute.bot.dao.BossDao;
 import ru.absolute.bot.dao.ItemsDao;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -120,6 +122,36 @@ public class BossService {
             }
         }
         return itemsMap;
+    }
+
+    /**
+     * Обновляет время убийства босса с указанным временем и обновляет кеш.
+     * @param bossName имя босса
+     * @param killTime время убийства (Instant)
+     * @throws IOException если произошла ошибка при обновлении данных
+     * @throws IllegalArgumentException если босс не найден
+     */
+    public void updateKillTime(String bossName, Instant killTime) throws IOException {
+        Boss boss = findBossByName(bossName);
+        if (boss != null) {
+            // Конвертируем Instant в LocalDateTime (используем системный часовой пояс)
+            LocalDateTime killDateTime = LocalDateTime.ofInstant(killTime, ZoneId.systemDefault());
+
+            // Обновляем время убийства (убираем наносекунды для точности)
+            boss.setKillTime(killDateTime.withNano(0));
+
+            // Обновляем данные в Google Sheets
+            bossDao.updateBoss(boss);
+
+            // Обновляем кеш
+            bossesCache = bossDao.getAllBosses();
+            lastBossesUpdateTime = System.currentTimeMillis();
+
+            log.info("Время убийства босса {} обновлено на {}. Кеш обновлен.",
+                    bossName, killDateTime);
+        } else {
+            throw new IllegalArgumentException("Босс с именем " + bossName + " не найден.");
+        }
     }
 
 }

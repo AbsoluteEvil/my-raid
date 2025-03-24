@@ -72,14 +72,15 @@ public class Main {
                             GatewayIntent.GUILD_MEMBERS
                     )
                     .setMemberCachePolicy(MemberCachePolicy.ALL)
-                    .setActivity(Activity.playing("Raid Boss Manager"))
+                    .setActivity(Activity.playing("Line][age MyWay Bot"))
                     .addEventListeners(commandHandler, buttonHandler)
                     .build();
 
             // Регистрируем команды
             jda.updateCommands().addCommands(
                     Commands.slash("k", "Отметить убийство босса")
-                            .addOption(OptionType.STRING, "boss_name", "Имя босса", true, true),
+                            .addOption(OptionType.STRING, "boss_name", "Имя босса", true, true)
+                            .addOption(OptionType.STRING, "time", "Время убийства (например, 12:30 или 2023-10-10 12:30)", false),
                     Commands.slash("create_event", "Создать событие для босса")
                             .addOption(OptionType.STRING, "boss_name", "Имя босса", true, true),
                     Commands.slash("show_events", "Показать список событий")

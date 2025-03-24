@@ -31,21 +31,19 @@ public class ButtonHandler extends ListenerAdapter {
         String buttonId = event.getComponentId();
 
         try {
-            if (buttonId.startsWith("skip_drops:")) {
-                createEventCommand.handleSkipButtonInteraction(event);
-            } else if (buttonId.startsWith("confirm_drops:")) {
-                createEventCommand.handleConfirmButtonInteraction(event);
-            } else if (buttonId.startsWith("ok_")) {
-                handleOkButton(event, buttonId);
-            } else if (buttonId.startsWith("create_event_")) {
-                handleCreateEventButton(event, buttonId);
-            } else if (buttonId.startsWith("edit_event:")) {
-                handleEditEventButton(event, buttonId);
-            } else if (buttonId.startsWith("close_event:")) {
-                handleCloseEventButton(event, buttonId);
-            } else {
-                log.warn("Неизвестная кнопка: {}", buttonId);
-                event.reply("Неизвестная команда.").setEphemeral(true).queue();
+            switch (buttonId) {
+                case String id when id.startsWith("skip_drops:") ->
+                        createEventCommand.handleSkipButtonInteraction(event);
+                case String id when id.startsWith("confirm_drops:") ->
+                        createEventCommand.handleConfirmButtonInteraction(event);
+                case String id when id.startsWith("ok_") ->
+                        handleOkButton(event, buttonId);
+                case String id when id.startsWith("create_event_") ->
+                        handleCreateEventButton(event, buttonId);
+                default -> {
+                    log.warn("Неизвестная кнопка: {}", buttonId);
+                    event.reply("Неизвестная команда.").setEphemeral(true).queue();
+                }
             }
         } catch (Exception e) {
             log.error("Ошибка при обработке кнопки: {}", buttonId, e);
@@ -70,44 +68,5 @@ public class ButtonHandler extends ListenerAdapter {
         String bossName = buttonId.replace("create_event_", "");
         createEventCommand.handleButtonEvent(event, bossName);
     }
-
-    /**
-     * Обрабатывает кнопку "Редактировать событие".
-     */
-    private void handleEditEventButton(ButtonInteractionEvent event, String buttonId) {
-        String eventId = buttonId.replace("edit_event:", "");
-        try {
-            Event eventItem = eventService.findEventById(eventId);
-            if (eventItem == null) {
-                event.reply("Событие не найдено.").setEphemeral(true).queue();
-                return;
-            }
-
-            event.reply("Редактирование события: " + eventItem.getId())
-                    .addActionRow(
-                            Button.primary("edit_drop:" + eventItem.getId(), "Изменить дроп"),
-                            Button.primary("edit_members:" + eventItem.getId(), "Изменить участников")
-                    )
-                    .queue();
-        } catch (Exception e) {
-            log.error("Ошибка при редактировании события", e);
-            event.reply("Произошла ошибка при редактировании события.").setEphemeral(true).queue();
-        }
-    }
-
-    /**
-     * Обрабатывает кнопку "Закрыть событие".
-     */
-    private void handleCloseEventButton(ButtonInteractionEvent event, String buttonId) {
-        String eventId = buttonId.replace("close_event:", "");
-        try {
-            eventService.editEvent(eventId, EventStatus.DONE, null, null);
-            event.reply("Событие " + eventId + " закрыто.").setEphemeral(true).queue();
-        } catch (Exception e) {
-            log.error("Ошибка при закрытии события", e);
-            event.reply("Произошла ошибка при закрытии события.").setEphemeral(true).queue();
-        }
-    }
-
 
 }

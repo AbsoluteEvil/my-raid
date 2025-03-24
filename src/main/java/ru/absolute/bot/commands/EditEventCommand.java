@@ -64,10 +64,26 @@ public class EditEventCommand {
         // Добавляем участников (если указаны)
         OptionMapping addMembersOption = event.getOption("add_member");
         if (addMembersOption != null) {
-            String[] membersToAdd = addMembersOption.getAsString().split(",");
-            List<String> currentMembers = new ArrayList<>(eventToEdit.getMembers()); // Создаем изменяемую копию
-            currentMembers.addAll(Arrays.asList(membersToAdd));
-            eventToEdit.setMembers(currentMembers);
+            String membersInput = addMembersOption.getAsString().trim();
+            if (!membersInput.isEmpty()) {
+                // Получаем текущих участников, фильтруя пустые строки
+                List<String> currentMembers = new ArrayList<>(eventToEdit.getMembers());
+                currentMembers.removeIf(String::isEmpty);  // Удаляем все пустые строки
+
+                // Обрабатываем ввод
+                if (membersInput.contains(",")) {
+                    String[] membersToAdd = membersInput.split("\\s*,\\s*");
+                    for (String member : membersToAdd) {
+                        if (!member.isEmpty()) {
+                            currentMembers.add(member);
+                        }
+                    }
+                } else {
+                    currentMembers.add(membersInput);
+                }
+
+                eventToEdit.setMembers(currentMembers);
+            }
         }
 
         // Удаляем участников (если указаны)
