@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class BossDao {
@@ -79,10 +80,13 @@ public class BossDao {
             LocalDateTime killTime = row.size() > 3 && !row.get(3).toString().isEmpty()
                     ? LocalDateTime.parse(row.get(3).toString().trim(), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                     : null;
-            List<String> itemList = Arrays.asList(row.get(4).toString().replace("[", "").replace("]", "").split(","));
-            String location = row.get(5).toString();
+            List<String> itemList = row.size() > 4
+                    ? Arrays.asList(row.get(4).toString().replace("[", "").replace("]", "").split(","))
+                    : Collections.emptyList();
+            String location = row.size() > 5 ? row.get(5).toString() : "";
+            String checkersId = row.size() > 6 ? row.get(6).toString() : "{}"; // Значение по умолчанию
 
-            return new Boss(id, name, level, killTime,itemList,location);
+            return new Boss(id, name, level, killTime, itemList, location,checkersId);
         } catch (Exception e) {
             logger.error("Ошибка при создании Boss из строки {}: {}", row, e.getMessage());
             return null;
@@ -100,6 +104,26 @@ public class BossDao {
             }
         }
         return drops;
+    }
+
+    public String findCheckerLoginById(int id) throws IOException {
+        String range = "checkers!A2:B";
+        ValueRange response = sheetsClient.getValues(range);
+
+        for (List<Object> row : response.getValues()) {
+            if (row.size() >= 2) {
+                try {
+                    int currentId = Integer.parseInt(row.get(0).toString());
+                    if (currentId == id) {
+                        return row.get(1).toString();
+                    }
+                } catch (NumberFormatException e) {
+                    logger.error("Ошибка при поиске палалки из строки {}: {}", row, e.getMessage());
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
 

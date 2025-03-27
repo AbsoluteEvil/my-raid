@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -60,6 +62,17 @@ public class BossService {
      * Получает всех боссов из кеша.
      */
     public List<Boss> getAllBosses() {
+        long currentTime = System.currentTimeMillis();
+        if (bossesCache == null || currentTime - lastBossesUpdateTime > BOSSES_CACHE_EXPIRATION_TIME) {
+            try {
+                log.info("Кеш боссов устарел. Перезагружаем...");
+                this.bossesCache = bossDao.getAllBosses();
+                this.lastBossesUpdateTime = currentTime;
+            } catch (IOException e) {
+                log.error("Ошибка при обновлении кеша боссов", e);
+                throw new RuntimeException("Не удалось обновить кеш боссов", e);
+            }
+        }
         return bossesCache;
     }
 
@@ -67,7 +80,7 @@ public class BossService {
      * Находит босса по полному совпадению имени.
      */
     public Boss findBossByName(String bossName) {
-        return bossesCache.stream()
+        return getAllBosses().stream()
                 .filter(boss -> boss.getName().equalsIgnoreCase(bossName))
                 .findFirst()
                 .orElse(null);
@@ -78,31 +91,9 @@ public class BossService {
      */
     public List<Boss> findBossesByName(String partialName) {
         String lowerCasePartialName = partialName.toLowerCase();
-        return bossesCache.stream()
+        return getAllBosses().stream()
                 .filter(boss -> boss.getName().toLowerCase().contains(lowerCasePartialName))
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Обновляет время убийства босса и обновляет кеш.
-     */
-    public void updateKillTime(String bossName) throws IOException {
-        Boss boss = findBossByName(bossName);
-        if (boss != null) {
-            // Обновляем время убийства
-            boss.setKillTime(LocalDateTime.now().withNano(0));
-
-            // Обновляем данные в Google Sheets
-            bossDao.updateBoss(boss);
-
-            // Обновляем кеш
-            bossesCache = bossDao.getAllBosses();
-            lastBossesUpdateTime = System.currentTimeMillis();
-
-            log.info("Время убийства босса {} обновлено. Кеш обновлен.", bossName);
-        } else {
-            throw new IllegalArgumentException("Босс с именем " + bossName + " не найден.");
-        }
     }
 
     /**
@@ -152,6 +143,53 @@ public class BossService {
         } else {
             throw new IllegalArgumentException("Босс с именем " + bossName + " не найден.");
         }
+    }
+
+    public List<String> getCheckerLoginsForBoss(int bossId) {
+        try {
+            Boss boss = findBossById(bossId);
+            if (boss == null || boss.getCheckersId() == null) {
+                return Collections.emptyList();
+            }
+            return getCheckerLogins(boss.getCheckersId());
+        } catch (Exception e) {
+            log.error("Ошибка получения проверяющих для босса {}", bossId, e);
+            return Collections.emptyList();
+        }
+    }
+
+    private List<String> getCheckerLogins(String checkersId) {
+        if (checkersId == null || checkersId.isEmpty() || checkersId.equals("{}")) {
+            return Collections.emptyList();
+        }
+
+        List<String> logins = new ArrayList<>();
+        String[] ids = checkersId.replaceAll("[{}]", "").split(",");
+
+        for (String idStr : ids) {
+            try {
+                int id = Integer.parseInt(idStr.trim());
+                String login = null;
+                try {
+                    login = bossDao.findCheckerLoginById(id);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                if (login != null && !login.isEmpty()) {
+                    logins.add(login);
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Некорректный ID проверяющего: {}", idStr);
+            }
+        }
+        return logins;
+    }
+
+    private Boss findBossById(int bossId) {
+        return bossesCache.stream()
+                .filter(b -> b.getId() == bossId)
+                .findFirst()
+                .orElse(null);
     }
 
 }

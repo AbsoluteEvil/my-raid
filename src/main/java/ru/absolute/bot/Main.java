@@ -44,11 +44,25 @@ public class Main {
             BossService bossService = new BossService(bossDao, itemsDao);
             EventService eventService = new EventService(eventDao);
 
+            // Создаем и настраиваем JDA
+            JDA jda = JDABuilder.createDefault(discordToken)
+                    .enableIntents(
+                            GatewayIntent.GUILD_MESSAGES,
+                            GatewayIntent.MESSAGE_CONTENT,
+                            GatewayIntent.GUILD_MEMBERS
+                    )
+                    .setMemberCachePolicy(MemberCachePolicy.ALL)
+                    .setActivity(Activity.playing("Line][age MyWay Bot"))
+                    .build();
+
+            // Ожидаем полной загрузки
+            jda.awaitReady();
+
             // Инициализация команд
             KillCommand killCommand = new KillCommand(bossService);
             CreateEventCommand createEventCommand = new CreateEventCommand(eventService, bossService);
             EditEventCommand editEventCommand = new EditEventCommand(eventService);
-            ShowCommand showCommand = new ShowCommand(bossService);
+            ShowCommand showCommand = new ShowCommand(bossService, jda);
             ShowEventsCommand showEventsCommand = new ShowEventsCommand(eventService, bossService);
 
             // Инициализация обработчиков
@@ -64,17 +78,9 @@ public class Main {
                     eventService,
                     showEventsCommand);
 
-            // Создаем и настраиваем JDA
-            JDA jda = JDABuilder.createDefault(discordToken)
-                    .enableIntents(
-                            GatewayIntent.GUILD_MESSAGES,
-                            GatewayIntent.MESSAGE_CONTENT,
-                            GatewayIntent.GUILD_MEMBERS
-                    )
-                    .setMemberCachePolicy(MemberCachePolicy.ALL)
-                    .setActivity(Activity.playing("Line][age MyWay Bot"))
-                    .addEventListeners(commandHandler, buttonHandler)
-                    .build();
+            // Добавляем обработчики после инициализации всех команд
+            jda.addEventListener(commandHandler, buttonHandler);
+
 
             // Регистрируем команды
             jda.updateCommands().addCommands(
@@ -85,7 +91,6 @@ public class Main {
                             .addOption(OptionType.STRING, "boss_name", "Имя босса", true, true),
                     Commands.slash("show_events", "Показать список событий")
                             .addOption(OptionType.STRING, "status", "Статус события (IN_PROGRESS/DONE)", false),
-                    Commands.slash("show", "Показать список ближайших боссов"),
                     Commands.slash("edit_event", "Редактировать событие")
                             .addOption(OptionType.STRING, "id", "ID события", true, true)
                             .addOption(OptionType.STRING, "set_status", "Новый статус (IN_PROGRESS/DONE)", false, true)
@@ -94,6 +99,12 @@ public class Main {
             ).queue();
 
             log.info("Бот запущен и команды зарегистрированы.");
+
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                showCommand.shutdown();
+                log.info("Бот завершает работу...");
+            }));
+
         } catch (Exception e) {
             log.error("Ошибка при запуске бота", e);
         }

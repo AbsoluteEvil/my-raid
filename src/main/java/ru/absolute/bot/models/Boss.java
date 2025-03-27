@@ -20,4 +20,5 @@ public class Boss {
     private LocalDateTime killTime;
     private List<String> itemList;
     private String location;
+    private String checkersId;
 }
