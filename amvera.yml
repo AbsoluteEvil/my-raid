@@ -1,8 +1,9 @@
+version: null
 meta:
   environment: jvm
   toolchain:
     name: gradle
-    version: "17"
+    version: "23"
 build:
   image: null
   args: null
@@ -13,4 +14,3 @@ run:
   jarName: main.jar
   persistenceMount: /data
   containerPort: "80"
-  servicePort: "80"
