@@ -21,8 +21,8 @@ public class NotificationService {
 
 
     public NotificationService(BossService bossService) {
-        this.scheduleChannelId = Long.parseLong(ConfigLoader.getProperty("bot.schedule_channel_id"));
-        this.alertChannelId = Long.parseLong(ConfigLoader.getProperty("bot.alert_channel_id"));
+        this.scheduleChannelId = Long.parseLong(ConfigLoader.getProperty("SCHEDULE_CHANNEL_ID"));
+        this.alertChannelId = Long.parseLong(ConfigLoader.getProperty("ALERT_CHANNEL_ID"));
         log.info("NotificationService initialized. Schedule channel: {}, Alert channel: {}",
                 scheduleChannelId, alertChannelId);
         this.bossService = bossService;

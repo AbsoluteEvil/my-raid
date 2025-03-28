@@ -4,8 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
-import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
-import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.requests.GatewayIntent;
@@ -25,7 +23,7 @@ import ru.absolute.bot.utils.ConfigLoader;
 public class Main {
     public static void main(String[] args) {
         // Получаем токен Discord
-        String discordToken = ConfigLoader.getProperty("discord.token");
+        String discordToken = ConfigLoader.getProperty("DISCORD_TOKEN");
         if (discordToken == null) {
             log.error("Ошибка: Токен Discord не задан в config.properties.");
             System.exit(1);
@@ -36,9 +34,9 @@ public class Main {
             GoogleSheetsClient googleSheetsClient = new GoogleSheetsClient();
 
             // Инициализация DAO
-            BossDao bossDao = new BossDao(googleSheetsClient, ConfigLoader.getProperty("google.bossesSheet"));
-            ItemsDao itemsDao = new ItemsDao(googleSheetsClient, ConfigLoader.getProperty("google.itemsSheet"));
-            EventDao eventDao = new EventDao(googleSheetsClient, ConfigLoader.getProperty("google.eventsSheet"));
+            BossDao bossDao = new BossDao(googleSheetsClient, ConfigLoader.getProperty("GOOGLE_BOSSES_SHEET"));
+            ItemsDao itemsDao = new ItemsDao(googleSheetsClient, ConfigLoader.getProperty("GOOGLE_ITEMS_SHEET"));
+            EventDao eventDao = new EventDao(googleSheetsClient, ConfigLoader.getProperty("GOOGLE_EVENTS_SHEET"));
 
             // Инициализация сервисов
             BossService bossService = new BossService(bossDao, itemsDao);

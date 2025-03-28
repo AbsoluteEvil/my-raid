@@ -13,6 +13,7 @@ import ru.absolute.bot.utils.ConfigLoader;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class GoogleSheetsClient {
@@ -22,13 +23,14 @@ public class GoogleSheetsClient {
 
     @SneakyThrows
     public GoogleSheetsClient() {
+
         // Загружаем конфигурацию
-        this.spreadsheetId = ConfigLoader.getProperty("google.spreadsheetId");
-        String credentialsFilePath = ConfigLoader.getProperty("google.credentialsFilePath");
+        this.spreadsheetId = ConfigLoader.getProperty("GOOGLE_SPREAD_SHEET_ID");
 
         // Инициализация Google Sheets API
         logger.info("Попытка подключения к Google Sheets...");
-        GoogleCredentials credentials = GoogleCredentials.fromStream(new FileInputStream(credentialsFilePath))
+        String jsonString=ConfigLoader.getProperty("GOOGLE_CREDENTIALS");
+        GoogleCredentials credentials = GoogleCredentials.fromStream(new java.io.ByteArrayInputStream(jsonString.getBytes(StandardCharsets.UTF_8)))
                 .createScoped(List.of("https://www.googleapis.com/auth/spreadsheets"));
 
         this.sheetsService = new Sheets.Builder(
