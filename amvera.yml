@@ -3,10 +3,10 @@ meta:
   environment: jvm
   toolchain:
     name: gradle
-    version: "23"
+    version: "21"
 build:
-  image: null
-  args: null
+  image: harbor.amvera.ru/amvera-hub/gradle:8.11-jdk21
+  args: gradle -Dorg.gradle.native=false build --no-daemon
   artifacts:
     build/libs/*.jar: /
 run:

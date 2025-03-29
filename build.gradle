@@ -77,10 +77,10 @@ tasks.withType(JavaExec).configureEach {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(23) // или 17, если используете preview
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += ["--enable-preview", "--release", "23"]
+    options.compilerArgs += ["--enable-preview", "--release", "21"]
 }
