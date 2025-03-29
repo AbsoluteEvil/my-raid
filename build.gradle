@@ -74,3 +74,13 @@ tasks.withType(Test).configureEach {
 tasks.withType(JavaExec).configureEach {
     jvmArgs += "--enable-preview"
 }
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(23) // или 17, если используете preview
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ["--enable-preview", "--release", "23"]
+}
