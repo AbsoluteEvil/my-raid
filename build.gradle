@@ -1,6 +1,21 @@
 plugins {
     id 'java'
     id 'application'
+    id 'org.springframework.boot' version '3.2.0'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['--enable-preview']
+}
+
+application {
+    mainClass = 'ru.absolute.bot.Main'
 }
 
 group 'com.example'
@@ -41,10 +56,6 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.2'
 }
 
-application {
-    mainClass = 'bot.Main'
-}
-
 test {
     useJUnitPlatform()
 }
@@ -61,26 +72,4 @@ jar {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += "--enable-preview"
-}
-
-tasks.withType(Test).configureEach {
-    jvmArgs += "--enable-preview"
-}
-
-tasks.withType(JavaExec).configureEach {
-    jvmArgs += "--enable-preview"
-}
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += ["--enable-preview", "--release", "21"]
 }
