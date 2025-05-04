@@ -1,150 +1,278 @@
 package ru.absolute.bot.commands;
 
-import lombok.extern.slf4j.Slf4j;
+import lombok.Getter;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
-import net.dv8tion.jda.api.interactions.AutoCompleteQuery;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.EntitySelectInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.Command;
-import net.dv8tion.jda.api.interactions.commands.OptionMapping;
+import net.dv8tion.jda.api.interactions.components.ActionRow;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.selections.EntitySelectMenu;
 import ru.absolute.bot.models.Event;
 import ru.absolute.bot.models.EventStatus;
 import ru.absolute.bot.services.EventService;
+import ru.absolute.bot.services.BossService;
+
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
-@Slf4j
-public class EditEventCommand {
-    private final EventService eventService;
+public class EditEventCommand extends BaseCommand {
+    private static final String EDIT_MEMBERS_BUTTON = "edit_members";
+    private static final String FINISH_EDIT_BUTTON = "finish_edit";
+    private static final String MEMBERS_SELECTION_MENU = "select_members";
+    private static final String CONFIRM_EDIT_BUTTON = "confirm_edit";
+    private static final String CANCEL_EDIT_BUTTON = "cancel_edit";
 
-    public EditEventCommand(EventService eventService) {
-        this.eventService = eventService;
+    @Getter
+    private final Map<String, EditingSession> editingSessions = new HashMap<>();
+
+    public EditEventCommand(EventService eventService, BossService bossService) {
+        super(bossService, eventService);
     }
 
-    public void handle(SlashCommandInteractionEvent event) {
-        log.info("Команда /edit_event вызвана.");
-        // Получаем ID события
-        OptionMapping idOption = event.getOption("id");
-        if (idOption == null) {
-            event.reply("Пожалуйста, укажите ID события.").setEphemeral(true).queue();
-            return;
-        }
-        String eventId = idOption.getAsString();
+    public void handleEditMembersCommand(SlashCommandInteractionEvent event) {
+        String eventId = event.getOption("id").getAsString();
+        String userId = event.getUser().getId();
 
-        // Получаем событие по ID
-        Event eventToEdit;
         try {
-            eventToEdit = eventService.findEventById(eventId);
-        } catch (IOException e) {
-            event.reply("Ошибка при поиске события.").setEphemeral(true).queue();
-            return;
-        }
-
-        if (eventToEdit == null) {
-            event.reply("Событие с ID **" + eventId + "** не найдено.").setEphemeral(true).queue();
-            return;
-        }
-
-        // Редактируем статус (если указан)
-        OptionMapping statusOption = event.getOption("set_status");
-        if (statusOption != null) {
-            String statusStr = statusOption.getAsString();
-            try {
-                EventStatus newStatus = EventStatus.valueOf(statusStr.toUpperCase());
-                eventToEdit.setStatus(newStatus);
-            } catch (IllegalArgumentException e) {
-                event.reply("Неверный статус события. Используйте IN_PROGRESS или DONE.").setEphemeral(true).queue();
+            Event dbEvent = eventService.findEventById(eventId);
+            if (dbEvent == null) {
+                event.reply("Событие с ID " + eventId + " не найдено.").setEphemeral(true).queue();
                 return;
             }
+
+            editingSessions.put(userId, new EditingSession(eventId,
+                    new ArrayList<>(dbEvent.getMembers()),
+                    event.getGuild()));
+            showInitialMembersList(event, dbEvent.getMembers());
+        } catch (Exception e) {
+            event.reply("Произошла ошибка при получении события: " + e.getMessage()).setEphemeral(true).queue();
+        }
+    }
+
+    private void showInitialMembersList(SlashCommandInteractionEvent event, List<String> members) {
+        String formattedMembers = formatMembersByGroups(members, event.getGuild());
+
+        List<Button> buttons = new ArrayList<>();
+        buttons.add(Button.primary(EDIT_MEMBERS_BUTTON, "Изменить список"));
+        buttons.add(Button.success(FINISH_EDIT_BUTTON, "Завершить"));
+
+        event.reply("**Текущие участники:**\n" + formattedMembers)
+                .setComponents(ActionRow.of(buttons))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    public void handleButtonInteraction(ButtonInteractionEvent event) {
+        String userId = event.getUser().getId();
+        EditingSession session = editingSessions.get(userId);
+
+        if (session == null) {
+            event.reply("Сессия редактирования истекла или не найдена. Начните заново.").setEphemeral(true).queue();
+            return;
         }
 
-        // Добавляем участников (если указаны)
-        OptionMapping addMembersOption = event.getOption("add_member");
-        if (addMembersOption != null) {
-            String membersInput = addMembersOption.getAsString().trim();
-            if (!membersInput.isEmpty()) {
-                // Получаем текущих участников, фильтруя пустые строки
-                List<String> currentMembers = new ArrayList<>(eventToEdit.getMembers());
-                currentMembers.removeIf(String::isEmpty);  // Удаляем все пустые строки
+        switch (event.getComponentId()) {
+            case EDIT_MEMBERS_BUTTON:
+                showMemberSelectionMenu(event, session);
+                break;
+            case CONFIRM_EDIT_BUTTON:
+                showMembersListWithControls(event, session.getCurrentMembers(), "Изменения сохранены.");
+                break;
+            case CANCEL_EDIT_BUTTON:
+                session.revertChanges();
+                showMembersListWithControls(event, session.getCurrentMembers(), "Изменения отменены.");
+                break;
+            case FINISH_EDIT_BUTTON:
+                completeEditing(event);
+                break;
+        }
+    }
 
-                // Обрабатываем ввод
-                if (membersInput.contains(",")) {
-                    String[] membersToAdd = membersInput.split("\\s*,\\s*");
-                    for (String member : membersToAdd) {
-                        if (!member.isEmpty()) {
-                            currentMembers.add(member);
-                        }
-                    }
-                } else {
-                    currentMembers.add(membersInput);
-                }
+    private void showMembersListWithControls(ButtonInteractionEvent event, List<String> members, String message) {
+        String formattedMembers = formatMembersByGroups(members, event.getGuild());
+        String fullMessage = (message != null ? message + "\n\n" : "") +
+                "**Текущие участники:**\n" + formattedMembers;
 
-                eventToEdit.setMembers(currentMembers);
-            }
+        List<Button> buttons = new ArrayList<>();
+        buttons.add(Button.primary(EDIT_MEMBERS_BUTTON, "Изменить список"));
+        buttons.add(Button.success(FINISH_EDIT_BUTTON, "Завершить"));
+
+        event.editMessage(fullMessage)
+                .setComponents(ActionRow.of(buttons))
+                .queue();
+    }
+
+    public void showMemberSelectionMenu(ButtonInteractionEvent event, EditingSession session) {
+        // Создаем EntitySelectMenu
+        EntitySelectMenu selectMenu = EntitySelectMenu.create(MEMBERS_SELECTION_MENU,
+                        EntitySelectMenu.SelectTarget.USER)
+                .setPlaceholder("Выберите участников (текущие выбраны автоматически)")
+                .setRequiredRange(0, 25)
+                .build();
+
+        // Получаем список текущих участников для отображения
+        String currentMembersText = formatMembersByGroups(session.getCurrentMembers(), session.getGuild());
+
+        // Отправляем сообщение с текущим списком
+        event.editMessage("**Текущие участники:**\n" + currentMembersText +
+                        "\n\nВыберите участников в меню ниже:")
+                .setComponents(
+                        ActionRow.of(selectMenu),
+                        ActionRow.of(
+                                Button.success(CONFIRM_EDIT_BUTTON, "Сохранить"),
+                                Button.danger(CANCEL_EDIT_BUTTON, "Отменить")
+                        )
+                )
+                .queue();
+    }
+
+    public void handleMemberSelection(EntitySelectInteractionEvent event) {
+        String userId = event.getUser().getId();
+        EditingSession session = editingSessions.get(userId);
+
+        if (session == null) {
+            event.reply("Сессия редактирования истекла. Начните заново.").setEphemeral(true).queue();
+            return;
         }
 
-        // Удаляем участников (если указаны)
-        OptionMapping deleteMembersOption = event.getOption("delete_member");
-        if (deleteMembersOption != null) {
-            String[] membersToDelete = deleteMembersOption.getAsString().split(",");
-            List<String> currentMembers = new ArrayList<>(eventToEdit.getMembers()); // Создаем изменяемую копию
-            currentMembers.removeAll(Arrays.asList(membersToDelete));
-            eventToEdit.setMembers(currentMembers);
+        // Получаем выбранные ID
+        List<String> selectedIds = event.getMentions().getMembers().stream()
+                .map(Member::getId)
+                .collect(Collectors.toList());
+
+        session.saveState();
+        session.setCurrentMembers(selectedIds);
+
+        // Показываем обновленный список
+        String updatedList = formatMembersByGroups(selectedIds, event.getGuild());
+        event.editMessage("**Новый список участников:**\n" + updatedList +
+                        "\n\nПодтвердите изменения:")
+                .setComponents(
+                        ActionRow.of(
+                                Button.success(CONFIRM_EDIT_BUTTON, "Сохранить"),
+                                Button.danger(CANCEL_EDIT_BUTTON, "Отменить")
+                        )
+                )
+                .queue();
+    }
+
+    public void completeEditing(ButtonInteractionEvent event) {
+        String userId = event.getUser().getId();
+        EditingSession session = editingSessions.get(userId);
+
+        if (session == null) {
+            event.reply("Сессия редактирования истекла. Начните заново.").setEphemeral(true).queue();
+            return;
         }
 
-        // Обновляем событие в базе данных
         try {
-            eventService.updateEvent(eventToEdit);
-            event.reply("Событие с ID **" + eventId + "** успешно обновлено.").setEphemeral(true).queue();
-        } catch (IOException e) {
-            event.reply("Ошибка при обновлении события.").setEphemeral(true).queue();
+            Event dbEvent = eventService.findEventById(session.getEventId());
+            if (dbEvent == null) {
+                event.reply("Событие с ID " + session.getEventId() + " не найдено.").setEphemeral(true).queue();
+                return;
+            }
+
+            List<String> originalMembers = dbEvent.getMembers();
+            List<String> currentMembers = session.getCurrentMembers();
+
+            // Обновляем событие в базе данных
+            eventService.editEvent(session.getEventId(), null,
+                    currentMembers.stream().filter(m -> !originalMembers.contains(m)).collect(Collectors.toList()),
+                    originalMembers.stream().filter(m -> !currentMembers.contains(m)).collect(Collectors.toList()));
+
+            // 1. Изменяем исходное сообщение
+            String updatedList = formatMembersByGroups(currentMembers, event.getGuild());
+            event.editMessage("✅ Список участников обновлен!\n\n**Текущие участники:**\n" + updatedList)
+                    .setComponents() // Убираем все кнопки
+                    .queue();
+
+            // 2. Создаем публичное уведомление
+            String publicMessage = String.format(
+                    "Изменения в событии \"%s, %s [%s]\", сделанные пользователем %s сохранены.\n\nУчастники:\n%s",
+                    dbEvent.getBossName(),
+                    dbEvent.getDate(),
+                    dbEvent.getId(),
+                    event.getUser().getAsMention(),
+                    updatedList
+            );
+
+            event.getChannel().sendMessage(publicMessage).queue();
+
+            editingSessions.remove(userId);
+        } catch (Exception e) {
+            event.reply("Произошла ошибка при обновлении события: " + e.getMessage())
+                    .setEphemeral(true)
+                    .queue();
+        }
+    }
+
+    public static class EditingSession {
+        @Getter
+        private final String eventId;
+        @Getter
+        private List<String> currentMembers;
+        private List<String> previousState;
+        @Getter
+        private final Guild guild;
+
+        public EditingSession(String eventId, List<String> initialMembers, Guild guild) {
+            this.eventId = eventId;
+            this.guild = guild;
+            this.currentMembers = new ArrayList<>(initialMembers);
+        }
+
+        public void setCurrentMembers(List<String> members) {
+            this.currentMembers = new ArrayList<>(members);
+        }
+
+        public void saveState() {
+            previousState = new ArrayList<>(currentMembers);
+        }
+
+        public void revertChanges() {
+            if (previousState != null) {
+                currentMembers = new ArrayList<>(previousState);
+            }
         }
     }
 
     public void handleAutocomplete(CommandAutoCompleteInteractionEvent event) {
-        AutoCompleteQuery option = event.getFocusedOption();
-        log.info("Обработка автодополнения для параметра: {}", option);
         try {
-            if (option.getName().equals("id")) {
-                // Автодополнение для ID событий со статусом IN_PROGRESS
-                List<Event> inProgressEvents = eventService.getEventsByStatus(EventStatus.IN_PROGRESS);
-                log.info("Найдено событий IN_PROGRESS: {}", inProgressEvents.size());
-                List<Command.Choice> options = inProgressEvents.stream()
-                        .map(evt -> new Command.Choice(
-                                evt.getBossName() + " (" + evt.getDate() + ")", // Подсказка: имя босса и дата
-                                evt.getId() // Значение: ID события
-                        ))
-                        .collect(Collectors.toList());
-                log.info("Предложено вариантов: {}", options.size());
-                event.replyChoices(options).queue();
+            if ("id".equals(event.getFocusedOption().getName())) {
+                handleEventIdAutocomplete(event);
+            } else if ("status".equals(event.getFocusedOption().getName())) {
+                handleStatusAutocomplete(event);
             }
-            else if (option.getName().equals("set_status")) {
-                // Предлагаем варианты статусов
-                List<Command.Choice> options = Arrays.stream(EventStatus.values())
-                        .map(status -> new Command.Choice(status.toString(), status.toString()))
-                        .collect(Collectors.toList());
-
-                event.replyChoices(options).queue();
-            }
-            else if (option.getName().equals("delete_member")) {
-                // Автодополнение для участников
-                String eventId = event.getOption("id").getAsString();
-                Event eventToEdit = eventService.findEventById(eventId);
-
-                if (eventToEdit != null) {
-                    List<Command.Choice> options = eventToEdit.getMembers().stream()
-                            .map(member -> new Command.Choice(member, member))
-                            .collect(Collectors.toList());
-
-                    event.replyChoices(options).queue();
-                }
-            }
-        } catch (IOException e) {
-            log.error("Ошибка при обработке автодополнения", e);
+        } catch (Exception e) {
+            event.replyChoices(new ArrayList<>()).queue();
         }
-
     }
+
+    private void handleEventIdAutocomplete(CommandAutoCompleteInteractionEvent event) throws IOException {
+        List<Command.Choice> options = eventService.getEventsByStatus(EventStatus.IN_PROGRESS)
+                .stream()
+                .sorted((e1, e2) -> e2.getDate().compareTo(e1.getDate())) // Сортировка по убыванию даты
+                .map(e -> new Command.Choice(e.getBossName() + " (" + e.getDate() + ")", e.getId()))
+                .limit(25)
+                .collect(Collectors.toList());
+        event.replyChoices(options).queue();
+    }
+
+    private void handleStatusAutocomplete(CommandAutoCompleteInteractionEvent event) {
+        List<Command.Choice> options = Arrays.stream(EventStatus.values())
+                .map(s -> new Command.Choice(s.name(), s.name()))
+                .collect(Collectors.toList());
+        event.replyChoices(options).queue();
+    }
+
+    public Optional<EditingSession> getEditingSession(String userId) {
+        return Optional.ofNullable(editingSessions.get(userId));
+    }
+
 }

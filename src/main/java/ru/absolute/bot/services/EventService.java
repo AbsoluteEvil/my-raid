@@ -11,6 +11,7 @@ import ru.absolute.bot.models.EventStatus;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -34,7 +35,7 @@ public class EventService {
                 LocalDate.now(),
                 bossName,
                 drop != null ? drop : "",
-                members != null ? members : List.of(),
+                members != null ? new ArrayList<>(members) : new ArrayList<>(), // Изменяемый список
                 members != null ? members.size() : 0,
                 EventStatus.IN_PROGRESS
         );
@@ -68,18 +69,18 @@ public class EventService {
     /**
      * Редактирует существующее событие.
      */
-    public void editEvent(String eventId, EventStatus status, List<String> addMembers, List<String> removeMembers) {
+    public void editEvent(String eventId, EventStatus status, List<String> addedMembers, List<String> removedMembers) {
         try {
             Event event = eventDao.findEventById(eventId);
             if (event != null) {
                 if (status != null) {
                     event.setStatus(status);
                 }
-                if (addMembers != null) {
-                    addMembers.forEach(event::addMember); // Используем addMember
+                if (addedMembers != null) {
+                    addedMembers.forEach(event::addMember);
                 }
-                if (removeMembers != null) {
-                    removeMembers.forEach(event::removeMember); // Используем removeMember
+                if (removedMembers != null) {
+                    removedMembers.forEach(event::removeMember);
                 }
                 eventDao.updateEvent(event);
             } else {

@@ -48,8 +48,8 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.8.9'
 
     // Логирование
-    implementation 'org.slf4j:slf4j-api:1.7.36'
-    implementation 'ch.qos.logback:logback-classic:1.2.11'
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'ch.qos.logback:logback-classic:1.4.11'
 
     // Тестирование
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'

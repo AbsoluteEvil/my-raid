@@ -9,10 +9,8 @@ import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
-import ru.absolute.bot.dao.BossDao;
 import ru.absolute.bot.models.Boss;
 import ru.absolute.bot.services.BossService;
-import ru.absolute.bot.services.EventService;
 import ru.absolute.bot.services.NotificationService;
 import ru.absolute.bot.utils.TimeUtils;
 
@@ -247,63 +245,41 @@ public class ShowCommand {
     /**
      * Формирует сообщение для отправки в Discord.
      */
-    private MessageCreateBuilder buildMessage(List<Boss> recentlyEnded, List<Boss> inRespawn, List<Boss> upcoming) {
-        MessageCreateBuilder messageBuilder = new MessageCreateBuilder();
-        messageBuilder.addContent("Время до респа боссов:\n");
+    private MessageCreateBuilder buildMessage(List<Boss> recentlyEnded,
+                                              List<Boss> inRespawn,
+                                              List<Boss> upcoming) {
+        MessageCreateBuilder builder = new MessageCreateBuilder();
 
-        // Боссы, у которых респ закончился менее часа назад
-        if (!recentlyEnded.isEmpty()) {
-            messageBuilder.addContent("====== РЕСП ЗАКОНЧИЛСЯ ======\n");
-            recentlyEnded.forEach(boss -> messageBuilder.addContent(formatRecentlyEndedBoss(boss)));
-        }
+        builder.addContent("Статус респа боссов:\n");
 
-        // Боссы в респе
-        if (!inRespawn.isEmpty()) {
-            messageBuilder.addContent("\n====== В РЕСПЕ ======\n");
-            inRespawn.forEach(boss -> messageBuilder.addContent(formatInRespawnBoss(boss)));
-        }
+        addBossesSection(builder, "Недавно закончились:\n", recentlyEnded);
+        addBossesSection(builder, "**В респауне:**\n", inRespawn);
+        addBossesSection(builder, "**Ближайшие:**\n", upcoming);
 
-        // Ближайшие боссы
-        if (!upcoming.isEmpty()) {
-            messageBuilder.addContent("\n===== БЛИЖАЙШИЕ =====\n");
-            upcoming.forEach(boss -> messageBuilder.addContent(formatUpcomingBoss(boss)));
-        }
-
-        // Если нет активных боссов
         if (inRespawn.isEmpty() && upcoming.isEmpty()) {
-            messageBuilder.addContent("Нет активных боссов.");
+            builder.addContent("Нет активных боссов.");
         }
 
-        return messageBuilder;
+        return builder;
     }
 
-    /**
-     * Форматирует информацию о боссе, у которого респ закончился менее часа назад.
-     */
-    private String formatRecentlyEndedBoss(Boss boss) {
-        long minutesSinceRespawnEnd = ChronoUnit.MINUTES.between(TimeUtils.calculateRespawnWindowEnd(boss), LocalDateTime.now());
-        return String.format("%s (Ур. %d) - Респ закончился %d минут назад\n", boss.getName(), boss.getLevel(), minutesSinceRespawnEnd);
+    private void addBossesSection(MessageCreateBuilder builder,
+                                  String header,
+                                  List<Boss> bosses) {
+        if (!bosses.isEmpty()) {
+            builder.addContent(header);
+            bosses.forEach(boss ->
+                    builder.addContent(formatBossLine(boss) + "\n"
+                    ));
+        }
     }
 
-    /**
-     * Форматирует информацию о боссе в респе.
-     */
-    private String formatInRespawnBoss(Boss boss) {
-        LocalDateTime now = LocalDateTime.now();
-        long hoursUntilRespawnEnd = ChronoUnit.HOURS.between(now, TimeUtils.calculateRespawnWindowEnd(boss));
-        long minutesUntilRespawnEnd = ChronoUnit.MINUTES.between(now, TimeUtils.calculateRespawnWindowEnd(boss)) % 60;
-        return String.format("%s (Ур. %d) - До конца респа: %d ч. %d мин.\n", boss.getName(), boss.getLevel(), hoursUntilRespawnEnd, minutesUntilRespawnEnd);
-    }
-
-    /**
-     * Форматирует информацию о ближайшем боссе.
-     */
-    private String formatUpcomingBoss(Boss boss) {
-        LocalDateTime now = LocalDateTime.now();
-        long hoursUntilRespawnStart = ChronoUnit.HOURS.between(now, TimeUtils.calculateRespawnWindowStart(boss));
-        long minutesUntilRespawnStart = ChronoUnit.MINUTES.between(now, TimeUtils.calculateRespawnWindowStart(boss)) % 60;
-        long secondsUntilRespawnStart = ChronoUnit.SECONDS.between(now, TimeUtils.calculateRespawnWindowStart(boss)) % 60;
-        return String.format("%s (Ур. %d) - через %02d:%02d:%02d\n", boss.getName(), boss.getLevel(), hoursUntilRespawnStart, minutesUntilRespawnStart, secondsUntilRespawnStart);
+    private String formatBossLine(Boss boss) {
+        String timeInfo = TimeUtils.formatBossRespawnStatus(boss);
+        return String.format("%s (Ур. %d) - %s",
+                boss.getName(),
+                boss.getLevel(),
+                timeInfo != null ? timeInfo : "Недоступен");
     }
 
     public void postSchedule(TextChannel channel) {
@@ -343,6 +319,7 @@ public class ShowCommand {
             }
             log.info("Планировщик успешно остановлен");
         } catch (InterruptedException e) {
+            log.error("Прерывание при завершении планировщика", e);
             log.error("Прерывание при завершении планировщика", e);
             scheduler.shutdownNow();
             Thread.currentThread().interrupt();

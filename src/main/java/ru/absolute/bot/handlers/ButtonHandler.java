@@ -1,36 +1,27 @@
 package ru.absolute.bot.handlers;
 
 import lombok.extern.slf4j.Slf4j;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.components.buttons.Button;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.jetbrains.annotations.NotNull;
 import ru.absolute.bot.commands.CreateEventCommand;
-import ru.absolute.bot.commands.ShowEventsCommand;
-import ru.absolute.bot.models.Event;
-import ru.absolute.bot.models.EventStatus;
-import ru.absolute.bot.services.EventService;
-
-import java.util.List;
+import ru.absolute.bot.commands.EditEventCommand;
 
 @Slf4j
 public class ButtonHandler extends ListenerAdapter {
     private final CreateEventCommand createEventCommand;
-    private final EventService eventService;
-    private final ShowEventsCommand showEventsCommand;
+    private final EditEventCommand editEventCommand;
 
-    public ButtonHandler(CreateEventCommand createEventCommand, EventService eventService, ShowEventsCommand showEventsCommand) {
+    public ButtonHandler(CreateEventCommand createEventCommand, EditEventCommand editEventCommand) {
         this.createEventCommand = createEventCommand;
-        this.eventService = eventService;
-        this.showEventsCommand = showEventsCommand;
+        this.editEventCommand = editEventCommand;
     }
 
     @Override
-    public void onButtonInteraction(ButtonInteractionEvent event) {
-        String buttonId = event.getComponentId();
-
+    public void onButtonInteraction(@NotNull ButtonInteractionEvent event) {
         try {
+            String buttonId = event.getComponentId();
             switch (buttonId) {
                 case String id when id.startsWith("skip_drops:") ->
                         createEventCommand.handleSkipButtonInteraction(event);
@@ -40,14 +31,24 @@ public class ButtonHandler extends ListenerAdapter {
                         handleOkButton(event, buttonId);
                 case String id when id.startsWith("create_event_") ->
                         handleCreateEventButton(event, buttonId);
+                case "edit_members" -> {
+                    String userId = event.getUser().getId();
+                    editEventCommand.getEditingSession(userId).ifPresentOrElse(
+                            session -> editEventCommand.showMemberSelectionMenu(event, session),
+                            () -> event.reply("Сессия редактирования не найдена. Начните заново.")
+                                    .setEphemeral(true).queue()
+                    );
+                }
+                case "confirm_edit", "cancel_edit", "finish_edit" ->
+                        editEventCommand.handleButtonInteraction(event);
                 default -> {
                     log.warn("Неизвестная кнопка: {}", buttonId);
                     event.reply("Неизвестная команда.").setEphemeral(true).queue();
                 }
             }
         } catch (Exception e) {
-            log.error("Ошибка при обработке кнопки: {}", buttonId, e);
-            event.reply("Произошла ошибка при обработке команды.").setEphemeral(true).queue();
+            log.error("Ошибка обработки кнопки: ", e);
+            event.reply("Произошла ошибка при обработке действия.").setEphemeral(true).queue();
         }
     }
 
@@ -69,4 +70,17 @@ public class ButtonHandler extends ListenerAdapter {
         createEventCommand.handleButtonEvent(event, bossName);
     }
 
+
+    @Override
+    public void onModalInteraction(@NotNull ModalInteractionEvent event) {
+        try {
+            if (event.getModalId().startsWith("member_search_modal:")) {
+                // Обработка модального окна, если нужно
+                event.reply("Модальное окно обработано").setEphemeral(true).queue();
+            }
+        } catch (Exception e) {
+            log.error("Ошибка обработки модального окна: ", e);
+            event.reply("Произошла ошибка при обработке формы.").setEphemeral(true).queue();
+        }
+    }
 }

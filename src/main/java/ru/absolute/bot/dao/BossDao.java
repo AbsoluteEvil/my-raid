@@ -93,19 +93,6 @@ public class BossDao {
         }
     }
 
-    public List<String> getDropsByBossName(String bossName) throws IOException {
-        ValueRange response = sheetsClient.getValues(sheetName);
-
-        List<String> drops = new ArrayList<>();
-        for (int i = 1; i < response.getValues().size(); i++) {
-            List<Object> row = response.getValues().get(i);
-            if (row.get(0).toString().equalsIgnoreCase(bossName)) {
-                drops.add(row.get(1).toString());
-            }
-        }
-        return drops;
-    }
-
     public String findCheckerLoginById(int id) throws IOException {
         String range = "checkers!A2:B";
         ValueRange response = sheetsClient.getValues(range);

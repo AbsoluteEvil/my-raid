@@ -71,8 +71,8 @@ public class EventDao {
             LocalDate date = LocalDate.parse(row.get(1).toString());
             String bossName = row.get(2).toString();
             String drop = row.get(3).toString();
-            List<String> members = List.of(row.get(4).toString().split(","));
-            int numberOfMembers = row.size() > 5 ? Integer.parseInt(row.get(5).toString()) : 0;
+            List<String> members = new ArrayList<>(Arrays.asList(row.get(4).toString().split(",")));
+            int numberOfMembers = row.size() > 5 ? Integer.parseInt(row.get(5).toString()) : members.size();
             EventStatus status = row.size() > 6 ? EventStatus.valueOf(row.get(6).toString()) : EventStatus.IN_PROGRESS;
 
             return new Event(id, date, bossName, drop, members, numberOfMembers, status);

@@ -5,7 +5,6 @@ import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInterac
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.AutoCompleteQuery;
 import net.dv8tion.jda.api.interactions.InteractionHook;
-import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
@@ -66,6 +65,13 @@ public class KillCommand {
             log.error("Не удалось подтвердить команду /kill", error);
             event.getHook().editOriginal("Произошла ошибка при обработке команды.").queue();
         });
+    }
+
+    private List<Button> createKillButtons(String bossName) {
+        return List.of(
+                Button.success("ok_" + bossName, "ОК"),
+                Button.primary("create_event_" + bossName, "Создать событие")
+        );
     }
 
     /**

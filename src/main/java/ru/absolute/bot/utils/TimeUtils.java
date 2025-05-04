@@ -113,41 +113,40 @@ public class TimeUtils {
         }
     }
 
-    public static String formatTimeUntilRespawn(Boss boss) {
+    public static String formatBossRespawnStatus(Boss boss) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime respawnStart = calculateRespawnWindowStart(boss);
         LocalDateTime respawnEnd = calculateRespawnWindowEnd(boss);
 
         if (respawnStart == null || respawnEnd == null) {
-            return null; // Не выводим боссов с пустым временем убийства
+            return null;
         }
 
-        // Если респ уже начался
-        if (now.isAfter(respawnStart) && now.isBefore(respawnEnd)) {
-            long minutesUntilRespawnEnd = ChronoUnit.MINUTES.between(now, respawnEnd);
-            if (minutesUntilRespawnEnd < 60) {
-                return "**В респе!** До конца респа: " + minutesUntilRespawnEnd + " минут";
-            } else {
-                long hoursUntilRespawnEnd = ChronoUnit.HOURS.between(now, respawnEnd);
-                return "**В респе!** До конца респа: " + hoursUntilRespawnEnd + " часов";
+        if (now.isAfter(respawnStart)) {
+            if (now.isBefore(respawnEnd)) {
+                return formatInRespawnTime(now, respawnEnd);
             }
+            return formatRespawnEnded(now, respawnEnd);
         }
-
-        // Если респ уже окончен
-        if (now.isAfter(respawnEnd)) {
-            long hoursSinceRespawnEnd = ChronoUnit.HOURS.between(respawnEnd, now);
-            if (hoursSinceRespawnEnd < 1) {
-                return "Респ окончен";
-            } else {
-                return null; // Не выводим босса, если респ окончен более часа назад
-            }
-        }
-
-        // Если респ еще не начался
-        long hoursUntilRespawnStart = ChronoUnit.HOURS.between(now, respawnStart);
-        long minutesUntilRespawnStart = ChronoUnit.MINUTES.between(now, respawnStart) % 60;
-        long secondsUntilRespawnStart = ChronoUnit.SECONDS.between(now, respawnStart) % 60;
-
-        return "через " + String.format("%02d:%02d:%02d", hoursUntilRespawnStart, minutesUntilRespawnStart, secondsUntilRespawnStart);
+        return formatTimeUntilRespawn(now, respawnStart);
     }
+
+    private static String formatInRespawnTime(LocalDateTime now, LocalDateTime respawnEnd) {
+        long minutes = ChronoUnit.MINUTES.between(now, respawnEnd);
+        return minutes < 60 ?
+                "До конца респа: " + minutes + " мин." :
+                "До конца респа: " + ChronoUnit.HOURS.between(now, respawnEnd) + " ч.";
+    }
+
+    private static String formatRespawnEnded(LocalDateTime now, LocalDateTime respawnEnd) {
+        long minutesSinceRespawnEnd = ChronoUnit.MINUTES.between(respawnEnd, now);
+        return String.format("Респ закончился %d минут назад\n", minutesSinceRespawnEnd);
+    }
+
+    private static String formatTimeUntilRespawn(LocalDateTime now, LocalDateTime respawnStart) {
+        long hours = ChronoUnit.HOURS.between(now, respawnStart);
+        long minutes = ChronoUnit.MINUTES.between(now, respawnStart) % 60;
+        return "Через " + String.format("%02d ч. %02d мин.", hours, minutes);
+    }
+
 }

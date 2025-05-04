@@ -4,8 +4,12 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import ru.absolute.bot.clients.GoogleSheetsClient;
@@ -47,6 +51,7 @@ public class Main {
                     .enableIntents(
                             GatewayIntent.GUILD_MESSAGES,
                             GatewayIntent.MESSAGE_CONTENT,
+                            GatewayIntent.GUILD_VOICE_STATES,
                             GatewayIntent.GUILD_MEMBERS
                     )
                     .setMemberCachePolicy(MemberCachePolicy.ALL)
@@ -59,9 +64,10 @@ public class Main {
             // Инициализация команд
             KillCommand killCommand = new KillCommand(bossService);
             CreateEventCommand createEventCommand = new CreateEventCommand(eventService, bossService);
-            EditEventCommand editEventCommand = new EditEventCommand(eventService);
+            EditEventCommand editEventCommand = new EditEventCommand(eventService, bossService);
             ShowCommand showCommand = new ShowCommand(bossService, jda);
             ShowEventsCommand showEventsCommand = new ShowEventsCommand(eventService, bossService);
+
 
             // Инициализация обработчиков
             CommandHandler commandHandler = new CommandHandler(
@@ -71,29 +77,32 @@ public class Main {
                     showCommand,
                     showEventsCommand
             );
-            ButtonHandler buttonHandler = new ButtonHandler(
-                    createEventCommand,
-                    eventService,
-                    showEventsCommand);
+            ButtonHandler buttonHandler = new ButtonHandler(createEventCommand, editEventCommand);
 
             // Добавляем обработчики после инициализации всех команд
             jda.addEventListener(commandHandler, buttonHandler);
-
 
             // Регистрируем команды
             jda.updateCommands().addCommands(
                     Commands.slash("k", "Отметить убийство босса")
                             .addOption(OptionType.STRING, "boss_name", "Имя босса", true, true)
                             .addOption(OptionType.STRING, "time", "Время убийства (например, 12:30 или 2023-10-10 12:30)", false),
+
                     Commands.slash("create_event", "Создать событие для босса")
                             .addOption(OptionType.STRING, "boss_name", "Имя босса", true, true),
+
                     Commands.slash("show_events", "Показать список событий")
                             .addOption(OptionType.STRING, "status", "Статус события (IN_PROGRESS/DONE)", false),
+
                     Commands.slash("edit_event", "Редактировать событие")
-                            .addOption(OptionType.STRING, "id", "ID события", true, true)
-                            .addOption(OptionType.STRING, "set_status", "Новый статус (IN_PROGRESS/DONE)", false, true)
-                            .addOption(OptionType.STRING, "add_member", "Добавить участников (через запятую)", false)
-                            .addOption(OptionType.STRING, "delete_member", "Удалить участников (через запятую)", false,true)
+                            .addSubcommands(
+                                    new SubcommandData("status", "Изменить статус события")
+                                            .addOption(OptionType.STRING, "id", "ID события", true, true)
+                                            .addOption(OptionType.STRING, "status", "Новый статус (IN_PROGRESS/DONE)", true, true),
+
+                                    new SubcommandData("edit_members", "Редактировать список участников")
+                                            .addOption(OptionType.STRING, "id", "ID события", true, true)
+                            )
             ).queue();
 
             log.info("Бот запущен и команды зарегистрированы.");
