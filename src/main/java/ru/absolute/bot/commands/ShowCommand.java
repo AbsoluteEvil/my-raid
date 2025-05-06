@@ -250,36 +250,71 @@ public class ShowCommand {
                                               List<Boss> upcoming) {
         MessageCreateBuilder builder = new MessageCreateBuilder();
 
-        builder.addContent("Статус респа боссов:\n");
+        builder.addContent("**Таблица респа боссов**\n");
 
-        addBossesSection(builder, "Недавно закончились:\n", recentlyEnded);
-        addBossesSection(builder, "**В респауне:**\n", inRespawn);
-        addBossesSection(builder, "**Ближайшие:**\n", upcoming);
+        if (!recentlyEnded.isEmpty()) {
+            builder.addContent("Недавно закончились:\n").addEmbeds();
+            builder.addContent("```ini\n" + formatBossTable(recentlyEnded, "закончился") + "```\n");
+        }
 
-        if (inRespawn.isEmpty() && upcoming.isEmpty()) {
-            builder.addContent("Нет активных боссов.");
+        if (!inRespawn.isEmpty()) {
+            builder.addContent("Сейчас в респауне:\n");
+            builder.addContent("```ini\n" + formatBossTable(inRespawn, "осталось") + "```\n");
+        }
+
+        if (!upcoming.isEmpty()) {
+            builder.addContent("Ближайшие боссы:\n");
+            builder.addContent("```ini\n" + formatBossTable(upcoming, "через") + "```\n");
+        }
+
+        if (inRespawn.isEmpty() && upcoming.isEmpty() && recentlyEnded.isEmpty()) {
+            builder.addContent("ℹ️ В настоящее время нет активных боссов.");
         }
 
         return builder;
     }
 
-    private void addBossesSection(MessageCreateBuilder builder,
-                                  String header,
-                                  List<Boss> bosses) {
-        if (!bosses.isEmpty()) {
-            builder.addContent(header);
-            bosses.forEach(boss ->
-                    builder.addContent(formatBossLine(boss) + "\n"
-                    ));
+    private String formatBossTable(List<Boss> bosses, String timePrefix) {
+        // Определяем максимальные длины для каждого столбца
+        int maxIconLength = bosses.stream()
+                .mapToInt(b -> getBossIcon(b.getName()).length())
+                .max()
+                .orElse(0);
+
+        int maxLevelLength = bosses.stream()
+                .mapToInt(b -> String.valueOf(b.getLevel()).length())
+                .max()
+                .orElse(2);
+
+        int maxNameLength = bosses.stream()
+                .mapToInt(b -> b.getName().length())
+                .max()
+                .orElse(20);
+
+        // Форматируем строку с учетом максимальных длин
+        String formatStr = "%-" + (maxIconLength + 1) + "s%-" + (maxLevelLength + 2) + "d%-" + (maxNameLength + 2) + "s%s%n";
+
+        StringBuilder sb = new StringBuilder();
+        for (Boss boss : bosses) {
+            String icon = getBossIcon(boss.getName());
+            String timeInfo = TimeUtils.formatBossRespawnStatus(boss);
+
+            sb.append(String.format(formatStr,
+                    icon,
+                    boss.getLevel(),
+                    boss.getName(),
+                    timeInfo));
         }
+        return sb.toString();
     }
 
-    private String formatBossLine(Boss boss) {
-        String timeInfo = TimeUtils.formatBossRespawnStatus(boss);
-        return String.format("%s (Ур. %d) - %s",
-                boss.getName(),
-                boss.getLevel(),
-                timeInfo != null ? timeInfo : "Недоступен");
+    private String getBossIcon(String bossName) {
+        return switch (bossName.toLowerCase()) {
+            case "core", "orfen" -> "🔺";
+            case "kernon", "death lord hallate", "longhorn golkonda" -> "🔹";
+            case "flame of splendor barakiel" -> "🔸";
+            default -> " ";
+        };
     }
 
     public void postSchedule(TextChannel channel) {
@@ -319,7 +354,6 @@ public class ShowCommand {
             }
             log.info("Планировщик успешно остановлен");
         } catch (InterruptedException e) {
-            log.error("Прерывание при завершении планировщика", e);
             log.error("Прерывание при завершении планировщика", e);
             scheduler.shutdownNow();
             Thread.currentThread().interrupt();

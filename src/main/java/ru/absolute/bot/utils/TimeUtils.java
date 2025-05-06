@@ -133,20 +133,22 @@ public class TimeUtils {
 
     private static String formatInRespawnTime(LocalDateTime now, LocalDateTime respawnEnd) {
         long minutes = ChronoUnit.MINUTES.between(now, respawnEnd);
+        if (minutes < 1) return "сейчас закончится  ";
         return minutes < 60 ?
-                "До конца респа: " + minutes + " мин." :
-                "До конца респа: " + ChronoUnit.HOURS.between(now, respawnEnd) + " ч.";
+                String.format("↔ %2d мин.", minutes) :
+                String.format("↔ %2d ч.  ", minutes / 60);
     }
 
     private static String formatRespawnEnded(LocalDateTime now, LocalDateTime respawnEnd) {
         long minutesSinceRespawnEnd = ChronoUnit.MINUTES.between(respawnEnd, now);
-        return String.format("Респ закончился %d минут назад\n", minutesSinceRespawnEnd);
+        return String.format("%d мин. назад\n", minutesSinceRespawnEnd);
     }
 
     private static String formatTimeUntilRespawn(LocalDateTime now, LocalDateTime respawnStart) {
-        long hours = ChronoUnit.HOURS.between(now, respawnStart);
-        long minutes = ChronoUnit.MINUTES.between(now, respawnStart) % 60;
-        return "Через " + String.format("%02d ч. %02d мин.", hours, minutes);
+        long totalMinutes = ChronoUnit.MINUTES.between(now, respawnStart);
+        return totalMinutes < 60 ?
+                String.format("➡ %2d мин.", totalMinutes) :
+                String.format("➡ %2d ч.  ", totalMinutes / 60);
     }
 
 }
