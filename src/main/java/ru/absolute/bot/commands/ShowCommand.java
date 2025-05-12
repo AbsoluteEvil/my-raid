@@ -275,24 +275,14 @@ public class ShowCommand {
     }
 
     private String formatBossTable(List<Boss> bosses, String timePrefix) {
-        // Определяем максимальные длины для каждого столбца
-        int maxIconLength = bosses.stream()
-                .mapToInt(b -> getBossIcon(b.getName()).length())
-                .max()
-                .orElse(0);
+        int maxIconLength = 2;
+        int maxLevelLength = bosses.stream().mapToInt(b -> String.valueOf(b.getLevel()).length()).max().orElse(2);
+        int maxNameLength = bosses.stream().mapToInt(b -> b.getName().length()).max().orElse(20);
 
-        int maxLevelLength = bosses.stream()
-                .mapToInt(b -> String.valueOf(b.getLevel()).length())
-                .max()
-                .orElse(2);
-
-        int maxNameLength = bosses.stream()
-                .mapToInt(b -> b.getName().length())
-                .max()
-                .orElse(20);
-
-        // Форматируем строку с учетом максимальных длин
-        String formatStr = "%-" + (maxIconLength + 1) + "s%-" + (maxLevelLength + 2) + "d%-" + (maxNameLength + 2) + "s%s%n";
+        String formatStr = "%-" + (maxIconLength + 1) + "s"  // Иконка + пробел
+                + "%-" + (maxLevelLength + 2) + "d" // Уровень
+                + "%-" + (maxNameLength + 2) + "s"  // Имя
+                + "%s%n";                           // Время
 
         StringBuilder sb = new StringBuilder();
         for (Boss boss : bosses) {
@@ -313,7 +303,7 @@ public class ShowCommand {
             case "core", "orfen" -> "🔺";
             case "kernon", "death lord hallate", "longhorn golkonda" -> "🔹";
             case "flame of splendor barakiel" -> "🔸";
-            default -> " ";
+            default -> "  ";
         };
     }
 

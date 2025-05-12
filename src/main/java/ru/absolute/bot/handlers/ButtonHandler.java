@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
+import net.dv8tion.jda.api.utils.messages.MessageEditData;
 import org.jetbrains.annotations.NotNull;
 import ru.absolute.bot.commands.CreateEventCommand;
 import ru.absolute.bot.commands.EditEventCommand;
@@ -57,9 +59,11 @@ public class ButtonHandler extends ListenerAdapter {
      */
     private void handleOkButton(ButtonInteractionEvent event, String buttonId) {
         String bossName = buttonId.replace("ok_", "");
-        event.editMessage("Время убийства босса " + bossName + " зафиксировано.")
-                .setComponents() // Убираем все кнопки
-                .queue();
+        MessageEditData editedMessage = new MessageEditBuilder()
+                .setContent(String.format("`%s` убит", bossName))
+                .setComponents()  // Убираем кнопки
+                .build();
+        event.editMessage(editedMessage).queue();
     }
 
     /**

@@ -36,22 +36,31 @@ public class EditEventCommand extends BaseCommand {
     }
 
     public void handleEditMembersCommand(SlashCommandInteractionEvent event) {
-        String eventId = event.getOption("id").getAsString();
-        String userId = event.getUser().getId();
-
         try {
+            if (event.getOption("id") == null) {
+                event.reply("Не указан ID события").setEphemeral(true).queue();
+                return;
+            }
+
+            String eventId = event.getOption("id").getAsString();
+            String userId = event.getUser().getId();
+
             Event dbEvent = eventService.findEventById(eventId);
             if (dbEvent == null) {
                 event.reply("Событие с ID " + eventId + " не найдено.").setEphemeral(true).queue();
                 return;
             }
 
-            editingSessions.put(userId, new EditingSession(eventId,
-                    new ArrayList<>(dbEvent.getMembers()),
-                    event.getGuild()));
-            showInitialMembersList(event, dbEvent.getMembers());
+            // Безопасное получение списка участников
+            List<String> members = dbEvent.getMembers() != null ?
+                    new ArrayList<>(dbEvent.getMembers()) :
+                    new ArrayList<>();
+
+            editingSessions.put(userId, new EditingSession(eventId, members, event.getGuild()));
+            showInitialMembersList(event, members);
         } catch (Exception e) {
-            event.reply("Произошла ошибка при получении события: " + e.getMessage()).setEphemeral(true).queue();
+            e.printStackTrace();
+            event.reply("Ошибка при редактировании: " + e.getMessage()).setEphemeral(true).queue();
         }
     }
 
@@ -69,11 +78,13 @@ public class EditEventCommand extends BaseCommand {
     }
 
     public void handleButtonInteraction(ButtonInteractionEvent event) {
+        event.deferReply().setEphemeral(true).queue(); // Немедленный ответ
+
         String userId = event.getUser().getId();
         EditingSession session = editingSessions.get(userId);
 
         if (session == null) {
-            event.reply("Сессия редактирования истекла или не найдена. Начните заново.").setEphemeral(true).queue();
+            event.getHook().sendMessage("Сессия редактирования истекла. Начните заново.").queue();
             return;
         }
 
@@ -103,7 +114,7 @@ public class EditEventCommand extends BaseCommand {
         buttons.add(Button.primary(EDIT_MEMBERS_BUTTON, "Изменить список"));
         buttons.add(Button.success(FINISH_EDIT_BUTTON, "Завершить"));
 
-        event.editMessage(fullMessage)
+        event.getHook().editOriginal(fullMessage)
                 .setComponents(ActionRow.of(buttons))
                 .queue();
     }
@@ -167,14 +178,18 @@ public class EditEventCommand extends BaseCommand {
         EditingSession session = editingSessions.get(userId);
 
         if (session == null) {
-            event.reply("Сессия редактирования истекла. Начните заново.").setEphemeral(true).queue();
+            event.reply("Сессия редактирования истекла. Начните заново.")
+                    .setEphemeral(true)
+                    .queue();
             return;
         }
 
         try {
             Event dbEvent = eventService.findEventById(session.getEventId());
             if (dbEvent == null) {
-                event.reply("Событие с ID " + session.getEventId() + " не найдено.").setEphemeral(true).queue();
+                event.reply("Событие с ID " + session.getEventId() + " не найдено.")
+                        .setEphemeral(true)
+                        .queue();
                 return;
             }
 
@@ -182,17 +197,20 @@ public class EditEventCommand extends BaseCommand {
             List<String> currentMembers = session.getCurrentMembers();
 
             // Обновляем событие в базе данных
-            eventService.editEvent(session.getEventId(), null,
+            eventService.editEvent(
+                    session.getEventId(),
+                    null,
                     currentMembers.stream().filter(m -> !originalMembers.contains(m)).collect(Collectors.toList()),
-                    originalMembers.stream().filter(m -> !currentMembers.contains(m)).collect(Collectors.toList()));
+                    originalMembers.stream().filter(m -> !currentMembers.contains(m)).collect(Collectors.toList())
+            );
 
-            // 1. Изменяем исходное сообщение
+            // 1. Обновляем исходное сообщение (убираем кнопки)
             String updatedList = formatMembersByGroups(currentMembers, event.getGuild());
             event.editMessage("✅ Список участников обновлен!\n\n**Текущие участники:**\n" + updatedList)
                     .setComponents() // Убираем все кнопки
                     .queue();
 
-            // 2. Создаем публичное уведомление
+            // 2. Отправляем публичное уведомление (если нужно)
             String publicMessage = String.format(
                     "Изменения в событии \"%s, %s [%s]\", сделанные пользователем %s сохранены.\n\nУчастники:\n%s",
                     dbEvent.getBossName(),
@@ -201,7 +219,6 @@ public class EditEventCommand extends BaseCommand {
                     event.getUser().getAsMention(),
                     updatedList
             );
-
             event.getChannel().sendMessage(publicMessage).queue();
 
             editingSessions.remove(userId);

@@ -47,14 +47,15 @@ public abstract class BaseCommand {
                 continue;
             }
 
-            String group = "MyWay";
+            String group = "🟡 MyWay";
             if (hasRyblbRole && member.getRoles().stream()
                     .anyMatch(role -> role.getName().equalsIgnoreCase("Ryblb&KO"))) {
-                group = "Ryblb&KO";
+                group = "🟣 Ryblb&KO";
             }
 
+            String memberDisplay = member.getAsMention();
             groupedMembers.computeIfAbsent(group, k -> new ArrayList<>())
-                    .add(member.getEffectiveName());
+                    .add(memberDisplay);
         }
 
         return groupedMembers.entrySet().stream()

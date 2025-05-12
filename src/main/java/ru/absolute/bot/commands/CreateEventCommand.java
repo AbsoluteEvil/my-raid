@@ -14,6 +14,8 @@ import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
+import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
+import net.dv8tion.jda.api.utils.messages.MessageEditData;
 import ru.absolute.bot.handlers.ReplyHandler;
 import ru.absolute.bot.models.Boss;
 import ru.absolute.bot.services.BossService;
@@ -144,17 +146,34 @@ public class CreateEventCommand extends BaseCommand {
         List<String> memberIds = getMembersFromVoiceChannel(event);
         String eventId = eventService.createEvent(bossName, drops, memberIds);
 
-        String message = buildEventMessage(eventId, bossName, drops, memberIds, Objects.requireNonNull(event.getGuild()));
+        MessageEditData message = buildEventMessage(eventId, bossName, drops, memberIds, Objects.requireNonNull(event.getGuild()));
         event.editMessage(message).setComponents().queue();
     }
 
-    private String buildEventMessage(String eventId, String bossName, String drops, List<String> memberIds, Guild guild) {
-        String base = "Событие было создано.\nID: [%s]\nБосс: [%s]\n";
-        String dropsPart = drops.isEmpty() ? "Дроп не выбран.\n" : "Дроп: [%s].\n";
-        String membersPart = "\nУчастники:\n" + formatMembersByGroups(memberIds, guild);
-        return String.format(base, eventId, bossName) +
-                (drops.isEmpty() ? dropsPart : String.format(dropsPart, getDropNames(drops))) +
-                membersPart;
+    private MessageEditData buildEventMessage(String eventId, String bossName, String drops, List<String> memberIds, Guild guild) {
+        // 1. Заголовок
+        String header = "** Событие создано**\n\n";
+
+        // 2. Информация о событии
+        String eventInfo = String.format("**ID:** `%s`\n**Босс:** **__%s__**\n",
+                eventId, bossName);
+
+        // 3. Дроп
+        String dropsPart = drops.isEmpty()
+                ? "*Дроп не указан*\n"
+                : String.format("**Дроп:** %s\n", getDropNames(drops));
+
+        // 4. Участники (с цветными группами)
+        String membersPart = memberIds.isEmpty()
+                ? "\n**Участники:** *пока никто не присоединился*"
+                : "\n**Участники:**\n" + formatMembersByGroups(memberIds, guild);
+
+        // Собираем всё в одно сообщение
+        String fullMessage = header + eventInfo + dropsPart + membersPart;
+
+        return new MessageEditBuilder()
+                .setContent(fullMessage)
+                .build();
     }
 
     private List<String> getMembersFromVoiceChannel(GenericInteractionCreateEvent event) {

@@ -8,6 +8,8 @@ import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
+import net.dv8tion.jda.api.utils.messages.MessageEditData;
 import ru.absolute.bot.services.BossService;
 import ru.absolute.bot.utils.TimeUtils;
 
@@ -28,35 +30,34 @@ public class KillCommand {
      * Обрабатывает команду /kill.
      */
     public void handle(SlashCommandInteractionEvent event) {
-        // Немедленно подтверждаем получение команды
         event.deferReply().queue(hook -> {
             try {
                 String bossName = Objects.requireNonNull(event.getOption("boss_name")).getAsString();
                 OptionMapping timeOption = event.getOption("time");
 
-                Instant killTime;
-                if (timeOption != null) {
-                    try {
-                        killTime = TimeUtils.parseKillTime(timeOption.getAsString());
-                    } catch (IllegalArgumentException e) {
-                        editHookWithError(hook, e.getMessage());
-                        return;
-                    }
-                } else {
-                    killTime = Instant.now();
-                }
+                Instant killTime = (timeOption != null)
+                        ? TimeUtils.parseKillTime(timeOption.getAsString())
+                        : Instant.now();
 
                 bossService.updateKillTime(bossName, killTime);
 
                 Button okButton = Button.success("ok_" + bossName, "ОК");
                 Button createEventButton = Button.primary("create_event_" + bossName, "Создать событие");
 
-                hook.editOriginal("Босс " + bossName + " убит. Время убийства: " + TimeUtils.formatTime(killTime))
+                // Форматируем сообщение с выделенным именем босса и красивым временем
+                String message = String.format("Босс '%s' убит", bossName);
+
+                MessageEditData editedMessage = new MessageEditBuilder()
+                        .setContent(message)
                         .setActionRow(okButton, createEventButton)
-                        .queue(
-                                success -> log.info("Успешно обработано убийство босса {}", bossName),
-                                error -> log.error("Ошибка при отправке ответа", error)
-                        );
+                        .build();
+
+                hook.editOriginal(editedMessage).queue(
+                        success -> log.info("Успешно обработано убийство босса {}", bossName),
+                        error -> log.error("Ошибка при отправке ответа", error)
+                );
+            } catch (IllegalArgumentException e) {
+                editHookWithError(hook, e.getMessage());
             } catch (Exception e) {
                 log.error("Ошибка при обновлении времени убийства босса", e);
                 editHookWithError(hook, "Произошла ошибка при обновлении времени убийства босса.");
@@ -65,13 +66,6 @@ public class KillCommand {
             log.error("Не удалось подтвердить команду /kill", error);
             event.getHook().editOriginal("Произошла ошибка при обработке команды.").queue();
         });
-    }
-
-    private List<Button> createKillButtons(String bossName) {
-        return List.of(
-                Button.success("ok_" + bossName, "ОК"),
-                Button.primary("create_event_" + bossName, "Создать событие")
-        );
     }
 
     /**
